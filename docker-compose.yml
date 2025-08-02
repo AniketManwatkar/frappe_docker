@@ -3,7 +3,6 @@ version: "3.7"
 services:
   mariadb:
     image: mariadb:10.6
-    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: erpnext
@@ -14,19 +13,15 @@ services:
 
   redis-cache:
     image: redis:alpine
-    restart: always
 
   redis-queue:
     image: redis:alpine
-    restart: always
 
   redis-socketio:
     image: redis:alpine
-    restart: always
 
   backend:
     image: frappe/erpnext-worker:version-14
-    restart: always
     depends_on:
       - mariadb
       - redis-queue
@@ -38,7 +33,6 @@ services:
 
   scheduler:
     image: frappe/erpnext-worker:version-14
-    restart: always
     command: bench schedule
     depends_on:
       - mariadb
@@ -50,7 +44,6 @@ services:
 
   nginx:
     image: frappe/erpnext-nginx:version-14
-    restart: always
     ports:
       - "8080:8080"
     depends_on:
