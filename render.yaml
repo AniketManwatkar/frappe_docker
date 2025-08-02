@@ -3,8 +3,10 @@ services:
     type: web
     env: docker
     plan: free
-    dockerImage: frappe/erpnext-nginx:version-14
+    image: frappe/erpnext-nginx:version-14
     autoDeploy: true
+    ports:
+      - 8080
     envVars:
       - key: FRAPPE_SITE_NAME_HEADER
         value: erp.evoastra.in
@@ -26,14 +28,12 @@ services:
         value: redis://redis-queue:6379
       - key: REDIS_SOCKETIO
         value: redis://redis-socketio:6379
-    ports:
-      - 8080
 
   - name: mariadb
     type: worker
     env: docker
     plan: free
-    dockerImage: mariadb:10.6
+    image: mariadb:10.6
     envVars:
       - key: MYSQL_ROOT_PASSWORD
         value: root
@@ -48,25 +48,25 @@ services:
     type: worker
     env: docker
     plan: free
-    dockerImage: redis:alpine
+    image: redis:alpine
 
   - name: redis-queue
     type: worker
     env: docker
     plan: free
-    dockerImage: redis:alpine
+    image: redis:alpine
 
   - name: redis-socketio
     type: worker
     env: docker
     plan: free
-    dockerImage: redis:alpine
+    image: redis:alpine
 
   - name: erpnext-worker
     type: worker
     env: docker
     plan: free
-    dockerImage: frappe/erpnext-worker:version-14
+    image: frappe/erpnext-worker:version-14
     startCommand: bench worker
     envVars:
       - key: DB_HOST
@@ -82,7 +82,7 @@ services:
     type: worker
     env: docker
     plan: free
-    dockerImage: frappe/erpnext-worker:version-14
+    image: frappe/erpnext-worker:version-14
     startCommand: bench schedule
     envVars:
       - key: DB_HOST
