@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  # ─── Application server ───────────────────────────────────────────────
+  # ─── Application server ───────────────────────────────────────────────────
   backend:
     image: frappe/erpnext:v15.72.2
     networks:
@@ -10,67 +10,70 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
     environment:
-      # Replace local DB host/port with Render’s Postgres
-      - DB_HOST=${RENDER_PG_HOST}            # e.g. db.yourrender.com
-      - DB_PORT=${RENDER_PG_PORT}            # typically 5432
-      - DB_NAME=${RENDER_PG_DATABASE}        # your DB name
-      - DB_USER=${RENDER_PG_USER}            # your DB user
-      - DB_PASSWORD=${RENDER_PG_PASSWORD}    # your DB password
+      - DB_HOST=$RENDER_PG_HOST
+      - DB_PORT=$RENDER_PG_PORT
+      - DB_NAME=$RENDER_PG_DATABASE
+      - DB_USER=$RENDER_PG_USER
+      - DB_PASSWORD=$RENDER_PG_PASSWORD
 
-  # ─── Initial configurator for Frappe site config ──────────────────────
+  # ─── Initial configurator for Frappe site config ───────────────────────────
   configurator:
     image: frappe/erpnext:v15.72.2
-    entrypoint: [bash, -c]
-    command: >
-      bench set-config -g db_host     $$DB_HOST;
-      bench set-config -g db_port     $$DB_PORT;
-      bench set-config -g redis_cache     "$$REDIS_CACHE";
-      bench set-config -g redis_queue     "$$REDIS_QUEUE";
-      bench set-config -g redis_socketio  "$$REDIS_SOCKETIO";
-      bench set-config -gp socketio_port  $$SOCKETIO_PORT;
-    environment:
-      # All Redis URLs come from Render’s services
-      - DB_HOST=${RENDER_PG_HOST}
-      - DB_PORT=${RENDER_PG_PORT}
-      - REDIS_CACHE=${REDIS_CACHE_URL}        # render://cache
-      - REDIS_QUEUE=${REDIS_QUEUE_URL}        # render://queue
-      - REDIS_SOCKETIO=${REDIS_SOCKETIO_URL}  # render://socketio
-      - SOCKETIO_PORT=9000
+    entrypoint: ["bash","-lc"]
+    command: |
+      bench set-config -g db_host     $DB_HOST
+      bench set-config -g db_port     $DB_PORT
+      bench set-config -g redis_cache "redis://$REDIS_CACHE_URL"
+      bench set-config -g redis_queue "redis://$REDIS_QUEUE_URL"
+      bench set-config -g redis_socketio "redis://$REDIS_SOCKETIO_URL"
+      bench set-config -gp socketio_port $SOCKETIO_PORT
+    networks:
+      - frappe_network
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
+    deploy:
+      restart_policy:
+        condition: none
 
-  # ─── Site creation ────────────────────────────────────────────────────
+  # ─── Site creation ────────────────────────────────────────────────────────
   create-site:
     image: frappe/erpnext:v15.72.2
-    entrypoint: [bash, -c]
-    command: >
-      wait-for-it -t 120 $$DB_HOST:$$DB_PORT;
-      wait-for-it -t 120 ${REDIS_CACHE_URL#redis://}:6379;
-      wait-for-it -t 120 ${REDIS_QUEUE_URL#redis://}:6379;
-      bench new-site --db-host $$DB_HOST --db-port $$DB_PORT
-                    --db-name $$DB_NAME --db-user $$DB_USER --db-password $$DB_PASSWORD
-                    --admin-password ${ADMIN_PASSWORD}
-                    --install-app erpnext --set-default frontend;
-    environment:
-      - DB_HOST=${RENDER_PG_HOST}
-      - DB_PORT=${RENDER_PG_PORT}
-      - DB_NAME=${RENDER_PG_DATABASE}
-      - DB_USER=${RENDER_PG_USER}
-      - DB_PASSWORD=${RENDER_PG_PASSWORD}
-      - REDIS_CACHE=${REDIS_CACHE_URL}
-      - REDIS_QUEUE=${REDIS_QUEUE_URL}
-      - SOCKETIO_PORT=9000
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    networks:
+      - frappe_network
+    entrypoint: ["bash","-lc"]
+    command: |
+      # wait for Postgres
+      wait-for-it -t 120 $RENDER_PG_HOST:$RENDER_PG_PORT
+
+      # wait for Redis cache & queue
+      wait-for-it -t 120 $REDIS_CACHE_URL
+      wait-for-it -t 120 $REDIS_QUEUE_URL
+
+      # bootstrap the new ERPNext site
+      bench new-site \
+        --db-host $RENDER_PG_HOST \
+        --db-port $RENDER_PG_PORT \
+        --db-name $RENDER_PG_DATABASE \
+        --db-user $RENDER_PG_USER \
+        --db-password $RENDER_PG_PASSWORD \
+        --admin-password $ADMIN_PASSWORD \
+        --install-app erpnext \
+        --set-default frontend
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
+    deploy:
+      restart_policy:
+        condition: none
 
-  # ─── Web frontend (NGINX + static assets) ─────────────────────────────
+  # ─── Web frontend (NGINX + static assets) ─────────────────────────────────
   frontend:
     image: frappe/erpnext:v15.72.2
     depends_on:
       - websocket
+    networks:
+      - frappe_network
     command: nginx-entrypoint.sh
     environment:
       - BACKEND=backend:8000
@@ -83,42 +86,65 @@ services:
       - logs:/home/frappe/frappe-bench/logs
     ports:
       - "8080:8080"
+    deploy:
+      restart_policy:
+        condition: on-failure
 
-  # ─── Background workers & scheduler ───────────────────────────────────
+  # ─── Background workers & scheduler ───────────────────────────────────────
   queue-long:
     image: frappe/erpnext:v15.72.2
+    networks:
+      - frappe_network
     command: bench worker --queue long,default,short
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   queue-short:
     image: frappe/erpnext:v15.72.2
+    networks:
+      - frappe_network
     command: bench worker --queue short,default
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   scheduler:
     image: frappe/erpnext:v15.72.2
+    networks:
+      - frappe_network
     command: bench schedule
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   websocket:
     image: frappe/erpnext:v15.72.2
+    networks:
+      - frappe_network
     command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
+    deploy:
+      restart_policy:
+        condition: on-failure
 
-# ─── Named volumes (persistent storage) ────────────────────────────────
+# ─── Named volumes (persistent storage) ────────────────────────────────────
 volumes:
   sites:
   logs:
 
-# ─── Private network for service-to-service communication ───────────────
+# ─── Private network for service-to-service communication ──────────────────
 networks:
   frappe_network:
     driver: bridge
