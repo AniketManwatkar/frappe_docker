@@ -30,7 +30,7 @@ services:
       - 8080
 
   - name: mariadb
-    type: private
+    type: worker
     env: docker
     plan: free
     dockerImage: mariadb:10.6
@@ -45,19 +45,19 @@ services:
         value: frappe
 
   - name: redis-cache
-    type: private
+    type: worker
     env: docker
     plan: free
     dockerImage: redis:alpine
 
   - name: redis-queue
-    type: private
+    type: worker
     env: docker
     plan: free
     dockerImage: redis:alpine
 
   - name: redis-socketio
-    type: private
+    type: worker
     env: docker
     plan: free
     dockerImage: redis:alpine
