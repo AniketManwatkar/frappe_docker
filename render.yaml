@@ -1,0 +1,95 @@
+services:
+  - name: erpnext-nginx
+    type: web
+    env: docker
+    plan: free
+    image: frappe/erpnext-nginx:version-14
+    autoDeploy: true
+    ports:
+      - 8080
+    envVars:
+      - key: FRAPPE_SITE_NAME_HEADER
+        value: erp.evoastra.in
+      - key: SOCKETIO_PORT
+        value: 9000
+      - key: DB_HOST
+        value: mariadb
+      - key: MYSQL_ROOT_PASSWORD
+        value: root
+      - key: MYSQL_DATABASE
+        value: erpnext
+      - key: MYSQL_USER
+        value: frappe
+      - key: MYSQL_PASSWORD
+        value: frappe
+      - key: REDIS_CACHE
+        value: redis://redis-cache:6379
+      - key: REDIS_QUEUE
+        value: redis://redis-queue:6379
+      - key: REDIS_SOCKETIO
+        value: redis://redis-socketio:6379
+
+  - name: mariadb
+    type: worker
+    env: docker
+    plan: free
+    image: mariadb:10.6
+    envVars:
+      - key: MYSQL_ROOT_PASSWORD
+        value: root
+      - key: MYSQL_DATABASE
+        value: erpnext
+      - key: MYSQL_USER
+        value: frappe
+      - key: MYSQL_PASSWORD
+        value: frappe
+
+  - name: redis-cache
+    type: worker
+    env: docker
+    plan: free
+    image: redis:alpine
+
+  - name: redis-queue
+    type: worker
+    env: docker
+    plan: free
+    image: redis:alpine
+
+  - name: redis-socketio
+    type: worker
+    env: docker
+    plan: free
+    image: redis:alpine
+
+  - name: erpnext-worker
+    type: worker
+    env: docker
+    plan: free
+    image: frappe/erpnext-worker:version-14
+    startCommand: bench worker
+    envVars:
+      - key: DB_HOST
+        value: mariadb
+      - key: REDIS_QUEUE
+        value: redis://redis-queue:6379
+      - key: REDIS_CACHE
+        value: redis://redis-cache:6379
+      - key: REDIS_SOCKETIO
+        value: redis://redis-socketio:6379
+
+  - name: erpnext-scheduler
+    type: worker
+    env: docker
+    plan: free
+    image: frappe/erpnext-worker:version-14
+    startCommand: bench schedule
+    envVars:
+      - key: DB_HOST
+        value: mariadb
+      - key: REDIS_QUEUE
+        value: redis://redis-queue:6379
+      - key: REDIS_CACHE
+        value: redis://redis-cache:6379
+      - key: REDIS_SOCKETIO
+        value: redis://redis-socketio:6379
