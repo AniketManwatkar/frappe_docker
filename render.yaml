@@ -3,9 +3,8 @@ services:
     type: web
     env: docker
     plan: free
-    dockerfilePath: ./Dockerfile
-    buildCommand: ""
-    startCommand: ""
+    dockerImage: frappe/erpnext-nginx:version-14
+    autoDeploy: true
     envVars:
       - key: FRAPPE_SITE_NAME_HEADER
         value: erp.evoastra.in
@@ -27,12 +26,14 @@ services:
         value: redis://redis-queue:6379
       - key: REDIS_SOCKETIO
         value: redis://redis-socketio:6379
+    ports:
+      - 8080
 
   - name: mariadb
     type: private
     env: docker
-    dockerImage: mariadb:10.6
     plan: free
+    dockerImage: mariadb:10.6
     envVars:
       - key: MYSQL_ROOT_PASSWORD
         value: root
@@ -46,33 +47,49 @@ services:
   - name: redis-cache
     type: private
     env: docker
-    dockerImage: redis:alpine
     plan: free
+    dockerImage: redis:alpine
 
   - name: redis-queue
     type: private
     env: docker
-    dockerImage: redis:alpine
     plan: free
+    dockerImage: redis:alpine
 
   - name: redis-socketio
     type: private
     env: docker
-    dockerImage: redis:alpine
     plan: free
+    dockerImage: redis:alpine
 
   - name: erpnext-worker
     type: worker
     env: docker
     plan: free
-    dockerfilePath: ./Dockerfile
+    dockerImage: frappe/erpnext-worker:version-14
     startCommand: bench worker
-    envVars: *envVarsCommon
+    envVars:
+      - key: DB_HOST
+        value: mariadb
+      - key: REDIS_QUEUE
+        value: redis://redis-queue:6379
+      - key: REDIS_CACHE
+        value: redis://redis-cache:6379
+      - key: REDIS_SOCKETIO
+        value: redis://redis-socketio:6379
 
   - name: erpnext-scheduler
     type: worker
     env: docker
     plan: free
-    dockerfilePath: ./Dockerfile
+    dockerImage: frappe/erpnext-worker:version-14
     startCommand: bench schedule
-    envVars: *envVarsCommon
+    envVars:
+      - key: DB_HOST
+        value: mariadb
+      - key: REDIS_QUEUE
+        value: redis://redis-queue:6379
+      - key: REDIS_CACHE
+        value: redis://redis-cache:6379
+      - key: REDIS_SOCKETIO
+        value: redis://redis-socketio:6379
